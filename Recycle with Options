@@ -1,0 +1,115 @@
+#!/bin/bash
+#This script recycle takes in filename as command line argument
+
+#Create a recyclebin directory in $HOME if it does not exist
+if [ ! -d $HOME/recyclebin ]
+then
+        mkdir $HOME/recyclebin
+fi
+
+
+#No filename provided
+if [ $# -eq 0 ]
+then
+        echo "recycle: No filename provided"
+        exit 1
+fi
+function recycle() {
+for i in $@
+do
+        #File do not exist
+        if [ ! -f $i ]
+        then
+              echo "recycle: File $i does not exist"
+              continue
+        #Filename provided is a directory
+        elif [ -d $i ]
+        then
+                echo " recycle:$i is a directory: Cannot remove directory"
+                continue
+        #Filename provided is recycle (We do not want to delete the script)
+        elif echo $i | grep -wq "recycle"
+        then
+                echo "Attempting to delete recycle - operation aborted"
+                continue
+        fi
+
+        #Obtaining inode number of filename
+        inode=$(ls -i $i | cut -d ' ' -f1)
+
+        #basename takes the full path of the file and shorten to the file name
+        filename=$(basename $i)
+
+        newfilename=$filename'_'$inode
+
+        mv $i $HOME/recyclebin/$newfilename
+        #Original location of file
+        oglocation=$(readlink -f $i)
+
+        #Copy content to .restore.info
+        echo $newfilename':'$oglocation >> $HOME/.restore.info
+
+done
+}
+
+function optFunc(){
+interactive=false
+verbose=false
+noOpt=true
+
+while getopts :iv opt
+do
+        case $opt in
+                i) interactive=true ;;
+                v) verbose=true ;;
+                \?) echo "$OPTARG is an invalid option"
+                    exit 2 ;;
+        esac
+noOpt=false
+
+done
+}
+
+function optSelection(){
+for i in $@
+do
+        if $noOpt
+        then
+                recycle $i
+        continue
+        fi
+       
+        #Interactive and verbose is true
+        if $interactive && $verbose
+        then
+                read -p " Would you like to recycle the file $i? " ans
+                case $ans in
+                        y* | Y* )  recycle $i; echo "recycle: File $i is recycled";;
+                        *) continue ;;
+                esac
+        continue
+   fi
+        #interactive is true
+        if $interactive
+        then
+                read -p " Would you like to recycle the file $i? " ans
+                case $ans in
+                        y* | Y* )  recycle $i ;;
+                        *) continue ;;
+                esac
+        continue
+        fi
+
+        #verbose is true
+        if $verbose
+        then
+                recycle $i
+                echo "recycle: File $i is recycled"
+        continue
+        fi
+done
+}
+
+optFunc $*
+shift $[OPTIND-1]
+optSelection $*
