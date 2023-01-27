@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#Files to be restored
+restore_f=$1
+
+#File directory
+flocation=$(grep $restore_f $HOME/.restore.info | cut -d ':' -f2)
+
+#file orignal name
+fbase=$(basename $flocation)
+
+#File original location
+fpath=$(readlink -f $flocation | rev | cut -d '/' -f2- | rev)
+
+#No file provided
+if [ $# -eq 0 ]
+then
+        echo "restore: Missing operand (No file provided)"
+        exit 1
+#File name provided does not exist
+elif [ ! -e $HOME/recyclebin/$restore_f ]
+then
+        echo "restore: Cannot restore $restore_f:No such file or directory"
+        exit 1
+fi
+
+#Check for existence of file in original directory
+if [ -e $flocation ]
+then
+        echo " File $restore_f already exist in target directory"
+        read -p "Do you want to overwrite? y/n " ans
+        case $ans in
+        #If user typed anything that starts with y case insensitive
+        y* | Y* )
+                        mv $HOME/recyclebin/$restore_f $fpath
+                        mv $fpath/$restore_f $fpath/$fbase
+                        grep -v $restore_f $HOME/.restore.info > $HOME/.restore.info.tmp
+                        mv $HOME/.restore.info.tmp $HOME/.restore.info
+                        echo "File $restore_f has been restored to original location" ;;
+        #Other selection that do not begin with y is invalid
+        *)
+                        echo "Selection is invalid"
+                        exit 1 ;;
+        esac
+#File with the same basename do not exist in original directory
+else
+        mv $HOME/recyclebin/$restore_f $fpath
+        mv $fpath/$restore_f $fpath/$fbase
+        grep -v $restore_f $HOME/.restore.info > $HOME/.restore.info.tmp
+        mv $HOME/.restore.info.tmp $HOME/.restore.info
+        echo "File $restore_f has been restored to original location"
+fi
