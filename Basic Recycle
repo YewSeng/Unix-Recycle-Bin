@@ -1,0 +1,51 @@
+#!/bin/bash
+
+#Phase 1 Basic Reycle
+#This script recycle takes in filename as command line argument
+
+#Create a recyclebin directory in $HOME if it does not exist
+if [ ! -d $HOME/recyclebin ]
+then
+        mkdir $HOME/recyclebin
+fi
+
+#No filename provided
+if [ $# -eq 0 ]
+then
+        echo "recycle: No filename provided"
+        exit 1
+#File does not exist
+elif [ ! -f $1 ]
+then
+        echo "recycle: File does not exist"
+        exit 1
+#Filename provided is a directory
+elif [ -d $1 ]
+then
+        echo " recycle: Cannot remove directory"
+        exit 1
+#Filename provided is recycle (We do not want to delete the script)
+elif echo $1 | grep -wq $0
+then
+        echo "Attempting to delete recycle - operation aborted"
+        exit 1
+fi
+
+#Obtaining inode number of filename
+inode=$(ls -i $1 | cut -d ' ' -f1)
+
+#basename takes the full path of the file and shorten to the file name
+filename=$(basename $1)
+
+newfilename=$filename'_'$inode
+
+#Move files to recyclebin with filename_inode
+mv $1 $HOME/recyclebin/$newfilename
+
+#Original location of file
+oglocation=$(readlink -f $1)
+
+#Copy content to .restore.info
+echo $newfilename':'$oglocation >> $HOME/.restore.info
+
+
