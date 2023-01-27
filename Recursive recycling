@@ -1,0 +1,304 @@
+#!/bin/bash
+
+#This script recycle takes in filename as command line argument
+
+#Create a recyclebin directory in $HOME if it does not exist
+if [ ! -d $HOME/recyclebin ]
+then
+        mkdir $HOME/recyclebin
+fi
+
+
+
+function optFunc(){
+
+interactive=false
+verbose=false
+recursive=false
+noOpt=true
+
+while getopts :ivr opt
+do
+        case $opt in
+                i) interactive=true ;;
+                v) verbose=true ;;
+                r) recursive=true ;;
+                \?) echo "$OPTARG is an invalid option"
+                    exit 1 ;;
+        esac
+
+noOpt=false
+
+done
+}
+
+#No filename provided
+if [ $# -eq 0 ]
+then
+        echo "recycle: No filename provided"
+        exit 1
+fi
+
+
+function recycle() {
+for i in $@
+do
+        #No such File
+        if [ ! -e $i ]
+        then
+                echo "recycle: File $i do not exist"
+  continue
+        fi
+        #File do not exist
+        if [ ! -f $i ]
+        then
+                if [ -d $i ]
+                then
+                        echo "recycle: $i is a directory, use options -r to access files within $i"
+                else
+                         echo "recycle: File $i does not exist"
+                fi
+              continue
+        fi
+        #Filename provided is a directory
+        if [ -d $i ]
+        then
+                echo " recycle:$i is a directory: Cannot remove directory"
+                continue
+        fi
+        #Filename provided is recycle (We do not want to delete the script)
+        if echo $i | grep -wq $0
+        then
+                echo "Attempting to delete recycle - operation aborted"
+                continue
+        fi
+
+        #Obtaining inode number of filename
+        inode=$(ls -i $i | cut -d ' ' -f1)
+
+        #basename takes the full path of the file and shorten to the file name
+        filename=$(basename $i)
+
+        newfilename=$filename'_'$inode
+
+        mv $i $HOME/recyclebin/$newfilename
+        #Original location of file
+        oglocation=$(readlink -f $i)
+        #Copy content to .restore.info
+        echo $newfilename':'$oglocation >> $HOME/.restore.info
+
+done
+}
+
+function recycler(){
+for i in $@
+do
+        if [ ! -e $i ]
+        then
+                echo "recycle: File $i does not exist"
+                continue
+        fi
+
+        #if argument itself is a dir
+        if [ -d $i ]
+        then
+                for k in $(find $i -type f)
+                do
+                        #obtaining inode number of filename
+                        ino=$(ls -i $k | cut -d ' ' -f1)
+
+                        #basename takes the full path of the file and shorten to the file name
+                        fname=$(basename $k)
+
+                        nfname=$fname'_'$ino
+
+                        mv $k $HOME/recyclebin/$nfname
+                        #Original location of file
+                        ogl=$(readlink -f $k)
+
+                        #Copy content to .restore.info
+                        echo $nfname':'$ogl >> $HOME/.restore.info
+                done
+                continue
+        fi
+        if [ -f $i ]
+        then
+                #obtaining inode number of filename
+                inode=$(ls -i $i | cut -d ' ' -f1)
+
+                #basename takes the full path of the file and shorten to the file name
+                filename=$(basename $i)
+
+                newfilename=$filename'_'$inode
+
+                mv $i $HOME/recyclebin/$newfilename
+                #Original location of file
+                oglocation=$(readlink -f $i)
+
+                #Copy content to .restore.info
+
+                echo $newfilename':'$oglocation >> $HOME/.restore.info
+                continue
+        fi
+
+        if [ -f $i ] && $(echo $i | grep -wq $0)
+        then
+                echo "Attempting to delete recycle - operation aborted"
+                continue
+        fi
+                                                                              done
+}
+
+optFunc $*
+shift $[OPTIND-1]
+
+function optSelection(){
+for i in $@
+do
+        #no options selected
+        if $noOpt
+        then
+                recycle $i
+        continue
+        fi
+
+        #Recursive, verbose and interactive is true
+        if $recursive && $interactive && $verbose
+        then
+                if [ -d $i ]
+                then
+                        for k in $(find $i -type f)
+                        do
+                                read -p "Would you like to recycle the file $k? " ans
+                                case $ans in
+                                        y* | Y* ) recycler $k ; echo "recycle: File $k is recycled" ;;
+                                        *) continue ;;
+                                esac
+                        done
+                        dir=$(dirname $i)
+                        rm -r $dir
+                        echo "recycle: Directory $dir is removed"
+
+                        continue
+                else
+                        read -p "Would you like to recycle the file $i? " ans
+                        case $ans in
+                        y* | Y* ) recycle $i ; echo "recycle: File $i is recycled";;
+                        *) continue ;;
+                        esac
+                        continue
+                fi
+
+                continue
+        fi
+
+        #recursive, verbose is true
+        if $recursive && $verbose
+        then
+  if [ -d $i ]
+                then
+                        for k in $(find $i -type f)
+                        do
+                                recycler $k
+                                echo "recycle: File $k is recycled"
+                        done
+                        dir=$(dirname $i)
+                        rm -r $dir
+                        echo "recycle: Directory $dir is removed"
+                        continue
+                else
+
+                        recycle $i
+                        echo "recycle: File $i is recycled"
+                        continue
+                fi
+
+                continue
+
+        fi
+
+        #recursive and interactive is true
+        if $recursive && $interactive
+        then
+                if [ -d $i ]
+                then
+                        for k in $(find $i -type f)
+                        do
+                                read -p "Would you like to recycle the file $k" ans
+                                case $ans in
+                                y* | Y* ) recycler $k ;;
+                                *) continue ;;
+                                esac
+                        done
+                        dir=$(dirname $i)
+                        rm -r $dir
+                        echo "recycle: Directory $dir is removed"
+                        continue
+                else
+                        read -p "Would you like to recycle the file $i" ans
+                        case $ans in
+                        y* | Y* ) recycle $i ;;
+                        *) continue ;;
+                        esac
+                        continue
+                fi
+                continue
+        fi
+
+        #interactive and verbose is true
+        if $interactive && $verbose
+        then
+                read -p " Would you like to recycle the file $i? " ans
+                case $ans in
+                        y* | Y* )  recycle $i; echo "recycle: File $i is recycled";;
+                        *) continue ;;
+                esac
+        continue
+        fi
+
+        #interactive is true
+        if $interactive
+        then
+                read -p " Would you like to recycle the file $i? " ans
+                case $ans in
+                        y* | Y* )  recycle $i ;;
+                        *) continue ;;
+                esac
+
+        continue
+        fi
+
+        #verbose is true
+        if $verbose
+        then
+                recycle $i
+                echo "recycle: File $i is recycled"
+        continue
+        fi
+
+        #recursive is true
+        if $recursive
+        then
+                if [ -d $i ]
+                then
+                        for k in $(find $i -type f)
+                        do
+                                recycler $k
+                        done
+                        dir=$(dirname $i)
+                        rm -r $dir
+                        echo "recycle: Directory $dir is removed"
+                        continue
+                else
+                        recycle $i
+                        continue
+                fi
+    continue
+        fi
+
+done
+
+}
+
+optSelection $*
+                          
